@@ -79,7 +79,11 @@ public sealed class SaveFileService : ISaveFileService
         Console.WriteLine($"Patched blob length: {patchedBlob.Length}");
 
         // 4. Re-chiffrer + ré-écrire
+        // Parse the completed blob before writing; refresh cached offsets for subsequent saves.
+        var reparsed = SaveBlobParser.Parse(patchedBlob);
         await EncryptAndWriteAsync(path, patchedBlob);
+        _currentBlob = patchedBlob;
+        _currentMeta = reparsed;
         Console.WriteLine("=== SaveFileService.SaveAsync COMPLETED ===");
     }
 
