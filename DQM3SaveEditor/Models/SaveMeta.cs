@@ -57,7 +57,9 @@ public class SaveMeta
 
     public void ImportMonsters(IEnumerable<Monster> edited)
     {
-        foreach (var src in edited)
+        var changes = edited.ToList();
+        // Validate every edit before mutating the cached save metadata.
+        foreach (var src in changes)
         {
             if (src.Skills.Count > 3 || src.Skills.Any(s => s.Id < 0 || s.Id > 2) || src.Skills.Select(s => s.Id).Distinct().Count() != src.Skills.Count)
                 throw new InvalidOperationException($"Monster {src.Id} has invalid or duplicate talent slot indices.");
@@ -70,6 +72,12 @@ public class SaveMeta
             if (tgt.Skills.Any(t => !src.Skills.Any(s => s.Id == t.Index)))
                 throw new NotSupportedException($"Monster {src.Id}: removing a talent slot requires structural save serialization, which is not implemented yet. No save was written.");
 
+        }
+
+        foreach (var src in changes)
+        {
+            var tgt = Monsters.FirstOrDefault(x => x.Id == src.Id);
+            if (tgt == null) continue;
             tgt.Name = src.Name;
             tgt.Kind = src.Kind;
             tgt.Level = src.Level;
