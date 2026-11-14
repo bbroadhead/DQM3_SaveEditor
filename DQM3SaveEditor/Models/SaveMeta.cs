@@ -67,8 +67,10 @@ public class SaveMeta
             var tgt = Monsters.FirstOrDefault(x => x.Id == src.Id);
             if (tgt == null) continue;
 
-            if (src.Skills.Any(s => !tgt.Skills.Any(t => t.Index == s.Id)))
-                throw new NotSupportedException($"Monster {src.Id}: adding a new talent slot requires structural save serialization, which is not implemented yet. No save was written.");
+            if (src.Skills.Where(s => !tgt.Skills.Any(t => t.Index == s.Id)).Any(s => s.Id < tgt.Skills.Count))
+                throw new InvalidOperationException($"Monster {src.Id}: new talent slots must follow existing slots.");
+            if (src.Skills.Any(s => string.IsNullOrWhiteSpace(s.Name)))
+                throw new InvalidOperationException($"Monster {src.Id}: select a talent name before saving.");
             if (tgt.Skills.Any(t => !src.Skills.Any(s => s.Id == t.Index)))
                 throw new NotSupportedException($"Monster {src.Id}: removing a talent slot requires structural save serialization, which is not implemented yet. No save was written.");
 
@@ -95,9 +97,14 @@ public class SaveMeta
                 tgt.Stats.Ranges // preserve the original ranges!
             );
 
-            foreach (var sk in src.Skills)
+            foreach (var sk in src.Skills.OrderBy(s => s.Id))
             {
                 var t = tgt.Skills.FirstOrDefault(s => s.Index == sk.Id);
+                if (t == null)
+                {
+                    tgt.Skills.Add(new SkillMeta { Index = sk.Id, Name = sk.Name, Allocated = sk.AllocatedPoints });
+                    continue;
+                }
                 if (t != null)
                 {
                     t.Allocated = sk.AllocatedPoints;
