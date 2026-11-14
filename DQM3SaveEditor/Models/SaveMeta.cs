@@ -1,4 +1,5 @@
 ﻿// Models/SaveMeta.cs
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
@@ -58,8 +59,16 @@ public class SaveMeta
     {
         foreach (var src in edited)
         {
+            if (src.Skills.Count > 3 || src.Skills.Any(s => s.Id < 0 || s.Id > 2) || src.Skills.Select(s => s.Id).Distinct().Count() != src.Skills.Count)
+                throw new InvalidOperationException($"Monster {src.Id} has invalid or duplicate talent slot indices.");
+
             var tgt = Monsters.FirstOrDefault(x => x.Id == src.Id);
             if (tgt == null) continue;
+
+            if (src.Skills.Any(s => !tgt.Skills.Any(t => t.Index == s.Id)))
+                throw new NotSupportedException($"Monster {src.Id}: adding a new talent slot requires structural save serialization, which is not implemented yet. No save was written.");
+            if (tgt.Skills.Any(t => !src.Skills.Any(s => s.Id == t.Index)))
+                throw new NotSupportedException($"Monster {src.Id}: removing a talent slot requires structural save serialization, which is not implemented yet. No save was written.");
 
             tgt.Name = src.Name;
             tgt.Kind = src.Kind;
