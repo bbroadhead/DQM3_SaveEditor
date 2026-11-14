@@ -27,6 +27,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using DQM3SaveEditor.Models;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Linq;
 
 namespace DQM3SaveEditor.Services;
 
@@ -231,7 +233,49 @@ internal static class SaveBlobParser
         foreach (var it in meta.Inventory)
             P($"I.{it.Code}", it.Count.ToString());
 
-        return sb.ToString();
+        return InsertNewTalentSlots(sb.ToString(), meta);
+    }
+
+    // Existing arrays contain three positions; unused positions are literal null values.
+    // Perform structural inserts only after all offset-based patches are finished.
+    private static string InsertNewTalentSlots(string blob, SaveMeta meta)
+    {
+        int zoneIdx = blob.IndexOf("_monsters:{{", StringComparison.Ordinal);
+        if (zoneIdx < 0) return blob;
+        int zoneEnd = FindMatchingBraces(blob, zoneIdx + "_monsters:".Length);
+        if (zoneEnd < 0) throw new FormatException("Invalid monster dictionary.");
+        var blocks = ExtractMonsterBlocks(blob.Substring(zoneIdx, zoneEnd - zoneIdx), zoneIdx).ToList();
+        foreach (var block in blocks.OrderByDescending(b => b.Start))
+        {
+            var monster = meta.Monsters.FirstOrDefault(m => m.Id == block.Id);
+            if (monster == null) continue;
+            var skillsHeader = Regex.Match(block.Inner, @"_skills:\{@:\{_hash:\{value:\d+,\},\},_array:\{");
+            if (!skillsHeader.Success) continue;
+            int arrayStart = skillsHeader.Index + skillsHeader.Length;
+            int arrayEnd = FindMatchingBraces(block.Inner, arrayStart - 1);
+            if (arrayEnd < 0) throw new FormatException("Invalid talent array.");
+            string arrayBody = block.Inner.Substring(arrayStart, arrayEnd - arrayStart - 1);
+            int existing = Regex.Matches(arrayBody, @"_allocatedPoint\s*:").Count;
+            if (monster.Skills.Count <= existing) continue;
+            if (monster.Skills.Count > 3) throw new InvalidOperationException("Too many talents.");
+            var nullSlots = Regex.Matches(arrayBody, @"(?<=,|\{)null(?=,|\})");
+            if (nullSlots.Count < monster.Skills.Count - existing)
+                throw new FormatException("Missing empty talent slots.");
+            // Replace from right to left to keep match offsets stable.
+            for (int i = monster.Skills.Count - 1; i >= existing; i--)
+            {
+                var talent = monster.Skills.Single(s => s.Index == i);
+                if (!Regex.IsMatch(talent.Name, @"^[A-Za-z][A-Za-z0-9_]*$"))
+                    throw new InvalidOperationException("Invalid internal talent identifier.");
+                var slot = nullSlots[i - existing];
+                ulong hash = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(8));
+                string record = $"{{@ :{{_hash:{{value:{hash},}},}},_id:{{value:{talent.Name},}},_allocatedPoint:{{value:{talent.Allocated},}},}}".Replace("{@ :", "{@:");
+                arrayBody = arrayBody.Remove(slot.Index, slot.Length).Insert(slot.Index, record);
+            }
+            int absoluteStart = block.Start + arrayStart;
+            blob = blob.Remove(absoluteStart, arrayEnd - arrayStart - 1).Insert(absoluteStart, arrayBody);
+        }
+        return blob;
     }
 
     /*──────────────────────────────────────────────────────────────
