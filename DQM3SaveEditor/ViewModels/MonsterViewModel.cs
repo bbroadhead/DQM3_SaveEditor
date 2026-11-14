@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Collections.ObjectModel;
 using DQM3SaveEditor.Models;
 using DQM3SaveEditor.Services;
@@ -135,7 +136,7 @@ public class MonsterViewModel : ViewModelBase
     {
         if (Skills.Count < 3)
         {
-            Skills.Add(new SkillAllocation { Id = 0, Name = string.Empty, AllocatedPoints = 0 });
+            Skills.Add(new SkillAllocation { Id = Enumerable.Range(0, 3).First(i => !Skills.Any(s => s.Id == i)), Name = string.Empty, AllocatedPoints = 0 });
             OnPropertyChanged(nameof(Skills));
         }
     }
