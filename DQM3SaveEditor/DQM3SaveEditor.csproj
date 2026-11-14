@@ -10,7 +10,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="Resources\monster.json">
+    <None Update="Resources\Monster.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Resources\talent.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
